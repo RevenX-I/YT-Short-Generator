@@ -17,7 +17,7 @@ class ContentEngine:
              raise ValueError("GEMINI_API_KEY not found in .env or secrets")
         
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-flash-latest')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def generate_script(self, topic):
         prompt = f"""
