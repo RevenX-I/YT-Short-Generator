@@ -1,6 +1,7 @@
 from moviepy.editor import *
 import os
 import PIL.Image
+import gc
 
 # Fix for Pillow 10.0.0+ removing ANTIALIAS
 if not hasattr(PIL.Image, 'ANTIALIAS'):
