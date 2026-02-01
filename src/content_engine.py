@@ -127,6 +127,7 @@ class ContentEngine:
             text = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(text)
         except Exception as e:
+            st.error(f"Try again! AI Error: {e}")
             print(f"Error generating topics: {e}")
             # Fallback Templates
             return [
