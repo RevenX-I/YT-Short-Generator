@@ -108,13 +108,42 @@ class VideoEditor:
 
             # Composite Scene
             scene_final = CompositeVideoClip([video_clip] + text_clips).set_duration(final_duration)
-            final_clips.append(scene_final)
+            
+            # --- MEMORY OPTIMIZATION: Render Scene Immediately ---
+            # Instead of keeping the complex graph in memory, we bake it to a file.
+            temp_scene_path = f"temp_scene_{idx}.mp4"
+            print(f"Rendering intermediate scene to {temp_scene_path}...")
+            
+            try:
+                scene_final.write_videofile(
+                    temp_scene_path, 
+                    fps=24, 
+                    codec="libx264", 
+                    audio_codec="aac", 
+                    preset='ultrafast', 
+                    threads=1, 
+                    logger=None # Silence logs for individual scenes
+                )
+            except Exception as e:
+                print(f"Error rendering temp scene {idx}: {e}")
+                continue
+            
+            # Close complex objects to free RAM immediately
+            scene_final.close()
+            video_clip.close()
+            audio_clip.close()
+            for tc in text_clips: tc.close()
+            gc.collect() # Force cleanup
+            
+            # Load the baked clip (low memory footprint)
+            baked_clip = VideoFileClip(temp_scene_path)
+            final_clips.append(baked_clip)
         
         if not final_clips:
             print("No valid scenes to compile.")
             return None
 
-        # Concatenate All Scenes
+        # Concatenate All Scenes (Now just simple video files)
         print("Concatenating scenes...")
         final_video = concatenate_videoclips(final_clips)
         
@@ -151,18 +180,17 @@ class VideoEditor:
                 print(f"Error adding watermark: {e}")
 
         # Write File
-        # threads=1 is CRITICAL for Streamlit Cloud (avoids OOM crashes)
-        print("Starting rendering...")
-        gc.collect()  # Force garbage collection before heavy render
+        print("Starting final render...")
+        gc.collect()
         
         try:
             final_video.write_videofile(
                 output_path, 
-                fps=24, # Reduced from 30 to save 20% memory
+                fps=24,
                 codec="libx264", 
                 audio_codec="aac", 
                 preset='ultrafast', 
-                threads=1, # Single thread prevents OOM
+                threads=1,
                 logger='bar'
             )
         except Exception as e:
@@ -172,11 +200,15 @@ class VideoEditor:
         # Cleanup
         try:
             final_video.close()
+            # Close baked clips and remove temp files
             for c in final_clips:
-                try: c.close()
-                except: pass
+                c.close()
+                if os.path.exists(c.filename):
+                    os.remove(c.filename)
+            
             if music_path: bg_music.close()
-        except:
+        except Exception as e:
+            print(f"Cleanup warning: {e}")
             pass
             
         return output_path
