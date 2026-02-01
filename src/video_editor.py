@@ -149,40 +149,36 @@ class VideoEditor:
             except Exception as e:
                 print(f"Error adding watermark: {e}")
 
-    # Write File
-    # threads=1 is CRITICAL for Streamlit Cloud (avoids OOM crashes)
-    print("Starting rendering...")
-    gc.collect()  # Force garbage collection before heavy render
-    
-    try:
-        final_video.write_videofile(
-            output_path, 
-            fps=24, # Reduced from 30 to save 20% memory
-            codec="libx264", 
-            audio_codec="aac", 
-            preset='ultrafast', 
-            threads=1, # Single thread prevents OOM
-            logger='bar'
-        )
-    except Exception as e:
-        print(f"Render Error: {e}")
-        return None
-
-    # Cleanup
-    try:
-        final_video.close()
-        for c in final_clips:
-            try: c.close()
-            except: pass
-        if music_path: bg_music.close()
-    except:
-        pass
+        # Write File
+        # threads=1 is CRITICAL for Streamlit Cloud (avoids OOM crashes)
+        print("Starting rendering...")
+        gc.collect()  # Force garbage collection before heavy render
         
-    return output_path
+        try:
+            final_video.write_videofile(
+                output_path, 
+                fps=24, # Reduced from 30 to save 20% memory
+                codec="libx264", 
+                audio_codec="aac", 
+                preset='ultrafast', 
+                threads=1, # Single thread prevents OOM
+                logger='bar'
+            )
+        except Exception as e:
+            print(f"Render Error: {e}")
+            return None
+
+        # Cleanup
+        try:
+            final_video.close()
+            for c in final_clips:
+                try: c.close()
+                except: pass
+            if music_path: bg_music.close()
+        except:
+            pass
+            
+        return output_path
 
 if __name__ == "__main__":
     pass
-
-if __name__ == "__main__":
-    pass
-
