@@ -15,6 +15,11 @@ class SubtitleGenerator:
         if not os.path.exists(audio_path):
             print(f"Audio file not found: {audio_path}")
             return []
+        
+        # Check if file is empty (0 bytes) which crashes faster-whisper
+        if os.path.getsize(audio_path) == 0:
+             print(f"Audio file is empty: {audio_path}")
+             return []
 
         print("Transcribing audio for subtitles...")
         segments, info = self.model.transcribe(audio_path, word_timestamps=True)
