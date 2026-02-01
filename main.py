@@ -7,8 +7,12 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # Fix for Windows asyncio Loop Error (WinError 6)
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# Fix for Windows asyncio Loop Error (WinError 6)
+try:
+    if sys.platform.startswith('win'):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+except Exception as e:
+    print(f"Warning: Could not set event loop policy: {e}")
 
 from src.content_engine import ContentEngine
 from src.media_fetcher import MediaFetcher
