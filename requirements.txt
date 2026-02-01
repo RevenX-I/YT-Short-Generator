@@ -1,0 +1,10 @@
+moviepy==1.0.3
+imageio==2.5.0
+imageio-ffmpeg==0.4.2
+edge-tts
+faster-whisper
+streamlit
+google-generativeai
+requests
+python-dotenv
+Pillow<10.0.0
