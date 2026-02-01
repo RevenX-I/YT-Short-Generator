@@ -45,6 +45,7 @@ class ContentEngine:
             script_data = json.loads(text)
             return script_data
         except Exception as e:
+            st.error(f"Detailed Error: {e}")
             print(f"Error generating script: {e}")
             return None
     def generate_viral_topics(self, niche):
