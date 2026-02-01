@@ -4,7 +4,7 @@ imageio-ffmpeg==0.4.2
 edge-tts
 faster-whisper
 streamlit
-google-generativeai
+google-generativeai>=0.7.0
 requests
 python-dotenv
 Pillow

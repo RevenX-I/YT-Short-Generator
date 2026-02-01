@@ -17,7 +17,7 @@ class ContentEngine:
              raise ValueError("GEMINI_API_KEY not found in .env or secrets")
         
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
     def generate_script(self, topic):
         prompt = f"""
@@ -45,9 +45,30 @@ class ContentEngine:
             script_data = json.loads(text)
             return script_data
         except Exception as e:
-            st.error(f"Detailed Error: {e}")
+            st.warning(f"⚠️ AI Busy ({e}). Switching to Offline Template.")
             print(f"Error generating script: {e}")
-            return None
+            # Fallback Template so the app NEVER stops working
+            return {
+                "title": f"Viral Video: {topic}",
+                "scenes": [
+                    {
+                        "text": f"Did you know this secret about {topic}?",
+                        "visual_keyword": "mystery dark background"
+                    },
+                    {
+                        "text": "Most people get this wrong, but the truth is shocking.",
+                        "visual_keyword": "shocked person face"
+                    },
+                    {
+                        "text": "Here is the one thing you need to remember.",
+                        "visual_keyword": "writing in notebook"
+                    },
+                    {
+                        "text": "Follow for more mind-blowing facts!",
+                        "visual_keyword": "subscribe button animation"
+                    }
+                ]
+            }
     def generate_viral_topics(self, niche):
         """Brainstorms 5 viral video ideas for a given niche."""
         prompt = f"""
