@@ -22,18 +22,18 @@ class ContentEngine:
     def generate_script(self, topic):
         prompt = f"""
         You are a professional short-form video script writer.
-        Create a 30-second engaging script about: "{topic}".
+        Create a 90-second minimum viral script about: "{topic}".
         
-        Strictly output strict JSON only. No markdown, no "here is the script".
+        Strictly output strict JSON only. No markdown.
         Structure:
         {{
             "title": "Video Title",
             "scenes": [
                 {{
-                    "text": "Voiceover text here",
-                    "visual_keyword": "search term for background video"
+                    "text": "Voiceover text here (approx 2 sentences)",
+                    "visual_keyword": "precise search term"
                 }},
-                ...
+                ... (create 12-15 scenes)
             ]
         }}
         """
@@ -52,20 +52,64 @@ class ContentEngine:
                 "title": f"Viral Video: {topic}",
                 "scenes": [
                     {
-                        "text": f"Did you know this secret about {topic}?",
+                        "text": f"Stop scrolling right now! Did you know this mind-blowing secret about {topic}?",
                         "visual_keyword": "mystery dark background"
                     },
                     {
-                        "text": "Most people get this wrong, but the truth is shocking.",
-                        "visual_keyword": "shocked person face"
+                        "text": "So many people get this completely wrong, and it's costing them big time.",
+                        "visual_keyword": "stressed person face"
                     },
                     {
-                        "text": "Here is the one thing you need to remember.",
-                        "visual_keyword": "writing in notebook"
+                        "text": "History proves that {topic} has been misunderstood for centuries.",
+                        "visual_keyword": "ancient history dusty book"
                     },
                     {
-                        "text": "Follow for more mind-blowing facts!",
-                        "visual_keyword": "subscribe button animation"
+                        "text": "But a new study reveals the shocking truth that changes everything we thought we knew.",
+                        "visual_keyword": "scientific research future technology"
+                    },
+                    {
+                        "text": "Let's dive deeper. Imagine a world where this wasn't the case.",
+                        "visual_keyword": "utopia futuristic city"
+                    },
+                    {
+                        "text": "The details are actually hidden in plain sight if you know where to look.",
+                        "visual_keyword": "detective looking magnifying glass"
+                    },
+                    {
+                        "text": "Experts have been arguing about this for decades, but the answer is finally here.",
+                        "visual_keyword": "scientists arguing meeting"
+                    },
+                    {
+                        "text": "It all starts with a simple concept that most of us ignore daily.",
+                        "visual_keyword": "crowded city street timelapse"
+                    },
+                    {
+                        "text": "Once you see it, you can never unsee it. It changes your entire perspective.",
+                        "visual_keyword": "eye opening close up"
+                    },
+                    {
+                        "text": "So next time you encounter {topic}, remember this one key fact.",
+                        "visual_keyword": "writing in notebook pen"
+                    },
+                    {
+                        "text": "It could be the difference between success and failure in this area.",
+                        "visual_keyword": "chess game checkmate"
+                    },
+                    {
+                        "text": "Share this with a friend who needs to hear this truth today.",
+                        "visual_keyword": "friends talking happy"
+                    },
+                    {
+                        "text": "If you want to stay ahead of the curve, you need to pay attention now.",
+                        "visual_keyword": "successful person skyline"
+                    },
+                    {
+                        "text": "We are uncovering more secrets like this every single day.",
+                        "visual_keyword": "digital data stream matrix"
+                    },
+                    {
+                        "text": "Hit that subscribe button for more secrets they don't want you to know!",
+                        "visual_keyword": "subscribe button animation neon"
                     }
                 ]
             }
