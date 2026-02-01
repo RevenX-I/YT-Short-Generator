@@ -1,15 +1,21 @@
 import os
 import json
 import google.generativeai as genai
+import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class ContentEngine:
     def __init__(self):
+        # Try finding key in env vars (Local) OR Streamlit secrets (Cloud)
         self.api_key = os.getenv("GEMINI_API_KEY")
+        if not self.api_key and "GEMINI_API_KEY" in st.secrets:
+            self.api_key = st.secrets["GEMINI_API_KEY"]
+
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY not found in .env")
+             raise ValueError("GEMINI_API_KEY not found in .env or secrets")
+        
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-flash-latest')
 
