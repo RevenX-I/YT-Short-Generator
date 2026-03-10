@@ -30,6 +30,9 @@ Run the Streamlit dashboard:
 ```bash
 streamlit run main.py
 ```
+After running, access the dashboard via your browser:
+- **Local:** `http://localhost:8501`
+- **Network:** `http://<your-ip>:8501`
 
 ## 🏗️ Architecture
 - **Brain**: `src/content_engine.py` (Gemini)
