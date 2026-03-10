@@ -2,6 +2,8 @@
 
 A modular, automated video creation tool using Gemini, Pexels, Edge-TTS, Faster-Whisper, and MoviePy.
 
+**[GitHub Repository](https://github.com/RevenX-I/YT-Short-Generator)**
+
 ## 🚀 Setup
 
 ### 1. System Requirements
