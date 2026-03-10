@@ -10,6 +10,31 @@ if not hasattr(PIL.Image, 'ANTIALIAS'):
 from moviepy.config import change_settings
 change_settings({"IMAGEMAGICK_BINARY": r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe"})
 
+# --- WINDOWS FIX: Monkey Patch sys.stderr.flush ---
+# Monkey Patch sys.stderr.flush for Windows
+try:
+    sys.stderr.flush()
+except Exception:
+    pass
+
+def safe_flush(): pass
+sys.stderr.flush = safe_flush
+
+import numpy as np
+
+def make_pop(duration=0.1, fps=44100):
+    """Synthesize a 'Pop' sound (sine sweep)."""
+    t = np.linspace(0, duration, int(fps * duration))
+    # Sweep freq from 200 to 50
+    freq = np.linspace(200, 50, len(t))
+    audio = 0.5 * np.sin(2 * np.pi * freq * t) * np.exp(-10 * t)
+    return AudioClip(lambda t: [audio[int(t*fps)]] * 2 if int(t*fps) < len(audio) else [0]*2, duration=duration, fps=fps)
+
+def make_whoosh(duration=0.5, fps=44100):
+    """Synthesize a 'Whoosh' sound (filtered noise)."""
+    # Simple approximation: White noise with volume envelope
+    make_frame = lambda t: [np.random.uniform(-0.3, 0.3) * np.sin(np.pi * t / duration)**2] * 2
+    return AudioClip(make_frame, duration=duration, fps=fps)
 
 
 class VideoEditor:
@@ -18,7 +43,7 @@ class VideoEditor:
         # Increase ImageMagick compatibility
         # If user faces issues, they might need config_defaults.py edits, but we assume standard install.
 
-    def create_shorts(self, scene_assets, output_path="output.mp4", music_path=None, watermark_path=None, use_ken_burns=False, aspect_ratio="9:16", text_color="white"):
+    def create_shorts(self, scene_assets, output_path="output.mp4", music_path=None, watermark_path=None, use_ken_burns=False, aspect_ratio="9:16", text_color="white", progress_callback=None):
         print(f"Editing video ({aspect_ratio})...")
         
         final_clips = []
@@ -30,7 +55,14 @@ class VideoEditor:
             target_width = 1920
             target_height = 1080
         
+        total_scenes = len(scene_assets)
+
         for idx, asset in enumerate(scene_assets):
+            # UPDATE PROGRESS: 0% to 80% is allocated for Scene Processing
+            if progress_callback:
+                progress = int((idx / total_scenes) * 80)
+                progress_callback(progress, f"Rendering Scene {idx+1}/{total_scenes}")
+
             video_path = asset['video']
             audio_path = asset['audio']
             subtitles = asset['subtitles']
@@ -98,16 +130,80 @@ class VideoEditor:
                 if duration <= 0: continue
                 
                 try:
-                    txt_clip = (TextClip(word, fontsize=80, color=text_color, font=self.font, stroke_color='black', stroke_width=2)
-                                .set_position('center')
+                    # REEL STYLE: Dynamic Colors + Pop Animation
+                    # Cycle colors to keep attention
+                    colors = ['#FFE135', '#FFFFFF', '#00FF00', '#FFE135', '#FFFFFF'] # Yellow, White, Green
+                    color = colors[idx % len(colors)]
+                    
+                    # Highlight Keywords: If the word is short and impactful, maybe force RED or Green
+                    if len(word) > 7: color = '#FFFFFF' # Keep long words white for readability
+
+                    txt_clip = (TextClip(
+                                    word.upper(), 
+                                    fontsize=110, 
+                                    color=color, 
+                                    font=self.font, 
+                                    method='label',
+                                    stroke_color='black', 
+                                    stroke_width=6
+                                )
+                                .set_position(('center', 1350)) # Slightly higher to avoid UI
                                 .set_start(start)
                                 .set_duration(duration))
+                    
+                    # POP ANIMATION: Start slightly larger and shrink to normal
+                    # This creates a "slam" effect
+                    txt_clip = txt_clip.resize(lambda t: 1.2 - 0.2 * (t / duration) if t < duration/2 else 1.0)
+                    
                     text_clips.append(txt_clip)
                 except Exception as e:
                     print(f"Error creating text clip: {e}")
 
+            # --- VISUAL POLISH: Grading & Vignette ---
+            # 1. Saturation Boost (Viral coloring)
+            # MoviePy 1.0.3: volumex is for audio. For video, we use color_fx.
+            # Using simple lambda for saturation:
+            # But let's use the 'lum_contrast' or built-in, or just keeping it raw to avoid heavy render.
+            # Efficient way: ImageMagick 'modulate'.
+            # video_clip = video_clip.fx(vfx.colorx, 1.2) # Increases saturation/brightness indiscriminately
+            
+            # Let's use a subtle Vignette for focus
+            # Create a localized mask
+            try:
+                # Simple vignette: Dark radial gradient
+                # Since creating a gradient mask in code is heavy, we'll strip it for speed 
+                # OR use a margin trick.
+                pass
+            except: pass
+
             # Composite Scene
-            scene_final = CompositeVideoClip([video_clip] + text_clips).set_duration(final_duration)
+            scene_clips = [video_clip] + text_clips
+            
+            # --- AUDIO POLISH: SFX ---
+            # Add a 'Whoosh' at the start of the scene (except first one)
+            sfx_clips = []
+            if idx > 0:
+                try:
+                    whoosh = make_whoosh(duration=0.4).volumex(0.4)
+                    sfx_clips.append(whoosh.set_start(0))
+                except Exception as e: print(f"SFX Error: {e}")
+            
+            # Add 'Pop' sounds for emphatic words (Where color is NOT yellow)
+            # We iterate subtitles again
+            for item in subtitles:
+                if len(item['word']) > 7: # Matches our logic for White text
+                     try:
+                        pop = make_pop(duration=0.1).volumex(0.3).set_start(item['start'])
+                        sfx_clips.append(pop)
+                     except: pass
+            
+            # Mix Audio
+            original_audio = video_clip.audio
+            if sfx_clips:
+                combined_audio = CompositeAudioClip([original_audio] + sfx_clips)
+                video_clip = video_clip.set_audio(combined_audio)
+            
+            scene_final = CompositeVideoClip(scene_clips).set_duration(final_duration)
             
             # --- MEMORY OPTIMIZATION: Render Scene Immediately ---
             # Instead of keeping the complex graph in memory, we bake it to a file.
@@ -122,9 +218,14 @@ class VideoEditor:
                     audio_codec="aac", 
                     preset='ultrafast', 
                     threads=1, 
-                    logger=None # Silence logs for individual scenes
+                    logger=None, # DISABLE PROGRESS BAR -> Fixes [Errno 22]
+                    temp_audiofile=f"temp_audio_{idx}.m4a",
+                    remove_temp=True
                 )
             except Exception as e:
+                import traceback
+                with open(f"scene_error_{idx}.txt", "w") as f:
+                    f.write(traceback.format_exc())
                 print(f"Error rendering temp scene {idx}: {e}")
                 continue
             
@@ -145,6 +246,9 @@ class VideoEditor:
 
         # Concatenate All Scenes (Now just simple video files)
         print("Concatenating scenes...")
+        if progress_callback:
+            progress_callback(85, "Stitching Scenes Together...")
+            
         final_video = concatenate_videoclips(final_clips)
         
         # Add Background Music (Global)
@@ -181,6 +285,9 @@ class VideoEditor:
 
         # Write File
         print("Starting final render...")
+        if progress_callback:
+            progress_callback(90, "Final Render & Encoding... (This takes a moment)")
+        
         gc.collect()
         
         try:
@@ -191,10 +298,17 @@ class VideoEditor:
                 audio_codec="aac", 
                 preset='ultrafast', 
                 threads=1,
-                logger='bar'
+                logger=None, # STRICTLY DISABLE TQDM (Fixes Errno 22)
+                temp_audiofile="temp_final_audio.m4a",
+                remove_temp=False # DISABLED AUTO-CLEANUP (Fixes WinError 32)
             )
         except Exception as e:
+            # LOG ERROR TO FILE
+            import traceback
+            error_msg = traceback.format_exc()
             print(f"Render Error: {e}")
+            with open("render_error.txt", "w") as f:
+                f.write(error_msg)
             return None
 
         # Cleanup

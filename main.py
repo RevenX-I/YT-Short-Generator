@@ -1,6 +1,24 @@
+import sys
+import os
+
+# --- WINDOWS CONSOLE FIX (CRITICAL) ---
+# Fixes OSError: [Errno 22] Invalid argument in tqdm/moviepy
+try:
+    sys.stderr.flush()
+except Exception:
+    pass
+
+def safe_flush():
+    pass
+
+sys.stderr.flush = safe_flush
+sys.stdout.flush = safe_flush
+# --------------------------------------
+
 import streamlit as st
 import asyncio
 import os
+import time
 import sys
 from dotenv import load_dotenv
 
@@ -54,26 +72,29 @@ st.markdown("""
         
         /* Larger Touch Targets for Buttons */
         .stButton>button {
-            min-height: 50px; /* Fat finger friendly */
-            font-size: 16px;
+            min-height: 55px; /* Fat finger friendly */
+            font-size: 18px;
+            touch-action: manipulation; /* Removes 300ms delay */
+        }
+        
+        /* Stop iOS from zooming in on inputs */
+        input, select, textarea {
+            font-size: 16px !important;
         }
         
         /* Adjust Heading Sizes */
-        h1 {
-            font-size: 28px !important;
-        }
-        h2 {
-            font-size: 24px !important;
-        }
-        h3 {
-            font-size: 20px !important;
-        }
+        h1 { font-size: 26px !important; }
+        h2 { font-size: 22px !important; }
+        h3 { font-size: 18px !important; }
         
-        /* Stack columns nicely if Streamlit doesn't automatically */
-        /* (Streamlit handles flex wrap, but we can enforce spacing) */
-        [data-testid="column"] {
-            margin-bottom: 20px;
-        }
+        /* Hide sidebar on mobile load if possible (Streamlit default behavior usually) */
+    }
+    
+    /* PWA FEEL */
+    /* Remove text selection on UI elements for app-like feel */
+    .stButton, .stMarkdown h1, .stMarkdown h2 {
+        user-select: none;
+        -webkit-user-select: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -135,13 +156,55 @@ with st.sidebar:
     # 2. AUDIO
     st.subheader("🔊 Audio")
     music_files = [f for f in os.listdir("songs") if f.endswith(('.mp3', '.wav'))] if os.path.exists("songs") else []
-    music_choice = st.selectbox("Background Music", ["None"] + music_files)
     
+    # Auto-BGM Logic
+    mood_data = st.session_state.get('script_data') or {}
+    detected_mood = mood_data.get('bgm_mood', 'calm').lower()
+    auto_choice = next((f for f in music_files if detected_mood in f.lower()), None)
+    
+    st.caption(f"👻 AI Mood: **{detected_mood.upper()}**")
+    music_choice = st.selectbox("Background Music", ["Auto", "None"] + music_files)
+    
+    # Resolve Auto Choice
+    final_music_path = None
+    if music_choice == "Auto":
+        if auto_choice:
+            final_music_path = os.path.join("songs", auto_choice)
+            st.info(f"🎵 Auto-Selected: {auto_choice}")
+        else:
+            st.warning(f"No track found for '{detected_mood}'. Using default.")
+            if music_files:
+                final_music_path = os.path.join("songs", music_files[0])
+    elif music_choice != "None":
+        final_music_path = os.path.join("songs", music_choice)
+
     # ElevenLabs
     el_key_exists = os.getenv("ELEVENLABS_API_KEY") is not None
     use_elevenlabs = st.toggle("🗣️ Voice Clone (ElevenLabs)", value=False, disabled=not el_key_exists, help="Requires ELEVENLABS_API_KEY in .env")
     if use_elevenlabs and not el_key_exists:
         st.warning("Add ELEVENLABS_API_KEY to .env to enable.")
+    
+    # VOICE SELECTION
+    edge_voices = {
+        "Christopher (Male, Formal)": "en-US-ChristopherNeural",
+        "Guy (Male, Casual)": "en-US-GuyNeural",
+        "Jenny (Female, Friendly)": "en-US-JennyNeural",
+        "Aria (Female, Energetic)": "en-US-AriaNeural"
+    }
+    
+    eleven_voices = {
+        "Rachel (Female, Soft)": "21m00Tcm4TlvDq8ikWAM",
+        "Adam (Male, Narration)": "pNInz6obpgDQGcFmaJgB",
+        "Antoni (Male, Intense)": "ErXwobaYiN019PkySvjV",
+        "Josh (Male, Storyteller)": "TxGEqnHWrfWFTfGW9XjX"
+    }
+
+    if use_elevenlabs:
+        voice_label = st.selectbox("🎙️ Voice Model (ElevenLabs)", list(eleven_voices.keys()))
+        selected_voice_id = eleven_voices[voice_label]
+    else:
+        voice_label = st.selectbox("🎙️ Voice Model (EdgeTTS)", list(edge_voices.keys()))
+        selected_voice_id = edge_voices[voice_label]
     
     st.divider()
     if st.button("🔄 Reset Project"):
@@ -247,16 +310,22 @@ elif st.session_state.step == 2:
     # Editable Scenes
     updated_scenes = []
     for idx, scene in enumerate(script_data['scenes']):
-        with st.expander(f"Scene {idx+1}: {scene['visual_keyword']}", expanded=True):
+        # Backwards compatibility for old session states
+        v_desc = scene.get('visual_description', scene.get('visual_keyword', ''))
+        v_term = scene.get('visual_search_term', scene.get('visual_keyword', ''))
+
+        with st.expander(f"Scene {idx+1}: {v_term}", expanded=True):
             col_text, col_vis = st.columns([2, 1])
             with col_text:
                 new_text = st.text_area(f"Voiceover {idx+1}", scene['text'], height=70)
             with col_vis:
-                new_keyword = st.text_input(f"Visual Search Term {idx+1}", scene['visual_keyword'])
+                st.caption(f"🎨 Idea: {v_desc}")
+                new_term = st.text_input(f"Search Pexels For {idx+1}", v_term)
             
             updated_scenes.append({
                 "text": new_text,
-                "visual_keyword": new_keyword
+                "visual_search_term": new_term,
+                "visual_description": v_desc
             })
     
     col1, col2 = st.columns(2)
@@ -294,20 +363,36 @@ elif st.session_state.step == 3:
         voice_provider = "elevenlabs" if use_elevenlabs else "edge"
         
         for idx, scene in enumerate(script_data['scenes']):
-            status_text.text(f"🎬 Producing Scene {idx+1}/{total_scenes}: {scene['visual_keyword']}")
+            # Display progress
+            term_display = scene.get('visual_search_term', scene.get('visual_keyword', 'Scene'))
+            status_text.text(f"🎬 Producing Scene {idx+1}/{total_scenes}: {term_display}")
             
             video_filename = f"assets/video_{idx}.mp4"
             audio_filename = f"assets/audio_{idx}.mp3"
             
             # 1. Video
-            # Pass orientation from sidebar
-            fetcher.download_video(scene['visual_keyword'], 5, video_filename, orientation=orientation)  
+            # Use the simple SEARCH TERM for Pexels
+            term = scene.get('visual_search_term', scene.get('visual_keyword'))
+            fetcher.download_video(term, 5, video_filename, orientation=orientation)  
             
             # 2. Audio
             if use_elevenlabs:
-                fetcher.generate_audio_elevenlabs(scene['text'], audio_filename)
+                audio_success = fetcher.generate_audio_elevenlabs(scene['text'], audio_filename, voice_id=selected_voice_id)
+                if not audio_success:
+                    st.warning(f"⚠️ ElevenLabs failed for scene {idx+1}. Using EdgeTTS fallback.")
+                    
+                    # Smart Fallback Map (ElevenLabs -> EdgeTTS)
+                    fallback_map = {
+                        "21m00Tcm4TlvDq8ikWAM": "en-US-JennyNeural", # Rachel -> Jenny
+                        "pNInz6obpgDQGcFmaJgB": "en-US-ChristopherNeural", # Adam -> Christopher
+                        "ErXwobaYiN019PkySvjV": "en-US-GuyNeural",   # Antoni -> Guy
+                        "TxGEqnHWrfWFTfGW9XjX": "en-US-ChristopherNeural" # Josh -> Christopher
+                    }
+                    
+                    fallback_voice = fallback_map.get(selected_voice_id, "en-US-ChristopherNeural")
+                    asyncio.run(fetcher.generate_audio(scene['text'], audio_filename, voice=fallback_voice))
             else:
-                asyncio.run(fetcher.generate_audio(scene['text'], audio_filename))
+                asyncio.run(fetcher.generate_audio(scene['text'], audio_filename, voice=selected_voice_id))
             
             # 3. Subtitles
             subtitles = sub_gen.generate_subtitles(audio_filename)
@@ -315,7 +400,8 @@ elif st.session_state.step == 3:
             scene_assets.append({
                 'video': video_filename,
                 'audio': audio_filename,
-                'subtitles': subtitles
+                'subtitles': subtitles,
+                'search_term': term 
             })
             
             progress_bar.progress((idx + 1) / total_scenes)
@@ -333,7 +419,40 @@ elif st.session_state.step == 3:
         for i, asset in enumerate(st.session_state.scene_assets):
             with cols[i % 3]:
                 st.video(asset['video'])
-                st.caption(f"Scene {i+1} Asset")
+                st.caption(f"Scene {i+1}")
+                
+                # Video Gallery UI
+                def_term = asset.get('search_term', 'Visual')
+                new_term = st.text_input(f"Search for Scene {i+1}", value=def_term, key=f"term_{i}", label_visibility="collapsed")
+                
+                # Search Button
+                if st.button(f"🔎 Find Clips", key=f"search_{i}"):
+                    with st.spinner("Searching Pexels..."):
+                        fetcher = MediaFetcher()
+                        results = fetcher.search_media(new_term, per_page=4)
+                        st.session_state[f'search_results_{i}'] = results
+                
+                # Show Gallery if results exist
+                if f'search_results_{i}' in st.session_state:
+                    results = st.session_state[f'search_results_{i}']
+                    if results:
+                        st.caption("👇 Preview & Select:")
+                        g_cols = st.columns(2) # 2x2 Grid
+                        for r_idx, res in enumerate(results):
+                            with g_cols[r_idx % 2]:
+                                st.video(res['preview_video'], loop=True, autoplay=True, muted=True)
+                                if st.button(f"✅ Use This", key=f"sel_{i}_{r_idx}"):
+                                    # Download High Res
+                                    with st.spinner("Downloading High Res..."):
+                                        fetcher = MediaFetcher()
+                                        fetcher.download_url(res['url'], asset['video'])
+                                        st.session_state.scene_assets[i]['search_term'] = new_term
+                                        del st.session_state[f'search_results_{i}'] # Clean up
+                                        st.success("Updated!")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                    else:
+                        st.warning("No videos found.")
         
         if st.button("🚀 Render Final Video", type="primary"):
             st.session_state.step = 4
@@ -387,10 +506,36 @@ elif st.session_state.step == 4:
         </div>
         """, unsafe_allow_html=True)
 
+        # Prepare Progress Bar
+        render_progress = st.progress(0)
+        render_status = st.empty()
+        
+        def update_render_progress(prog, text):
+            render_progress.progress(prog)
+            render_status.text(f"⏳ {text}")
+
         editor = VideoEditor(font_path=f"fonts/{font_choice}")
         output_file = "assets/final_director_cut.mp4"
         
-        music_path = f"songs/{music_choice}" if music_choice != "None" else None
+        # Resolve Music Path
+        music_path = None
+        if music_choice == "Auto":
+            # Find best match for mood
+            mood = st.session_state.get('script_data', {}).get('bgm_mood', 'calm').lower()
+            music_files = [f for f in os.listdir("songs") if f.endswith(('.mp3', '.wav'))] if os.path.exists("songs") else []
+            
+            # Simple match: check if mood string is in filename
+            best_match = next((f for f in music_files if mood in f.lower()), None)
+            
+            if best_match:
+                music_path = f"songs/{best_match}"
+                st.info(f"🎵 Auto-Selected BGM: {best_match}")
+            elif music_files:
+                music_path = f"songs/{music_files[0]}" # Fallback
+                st.warning(f"⚠️ No exact match for '{mood}'. Using: {music_files[0]}")
+        
+        elif music_choice != "None":
+            music_path = f"songs/{music_choice}"
         
         # Extract 9:16 or 16:9 from selector "Shorts (9:16)"
         clean_aspect = "9:16"
@@ -404,11 +549,24 @@ elif st.session_state.step == 4:
             watermark_path=watermark_path,
             use_ken_burns=use_ken_burns,
             aspect_ratio=clean_aspect,
-            text_color=text_color
+            text_color=text_color,
+            progress_callback=update_render_progress
         )
+        
+        # Finish up
+        render_progress.progress(100)
+        render_status.text("✅ Complete!")
         status.update(label="Rendering Complete!", state="complete")
     
     if result_path:
         st.balloons()
         st.success("✨ Your Masterpiece is Ready!")
         st.video(result_path)
+    else:
+        st.error("❌ Rendering Failed!")
+        # Check for error logs
+        if os.path.exists("render_error.txt"):
+            with open("render_error.txt", "r") as f:
+                st.text(f.read()) # Use plain text to avoid JS SyntaxHighlighter crash
+        else:
+            st.warning("No specific error log found. Check black terminal window.")

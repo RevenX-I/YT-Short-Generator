@@ -17,3 +17,8 @@ output.mp4
 # OS
 .DS_Store
 Thumbs.db
+
+build/
+dist/
+*.exe
+*.spec

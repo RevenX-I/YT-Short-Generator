@@ -7,21 +7,27 @@ class SubtitleGenerator:
         # Run on CPU to avoid complex CUDA setup requirements for the user
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
+    def safe_print(self, text):
+        try:
+            print(text)
+        except OSError:
+            pass
+
     def generate_subtitles(self, audio_path):
         """
         Generates word-level timestamps for the given audio file.
         Returns a list of dicts: {'word': str, 'start': float, 'end': float}
         """
         if not os.path.exists(audio_path):
-            print(f"Audio file not found: {audio_path}")
+            self.safe_print(f"Audio file not found: {audio_path}")
             return []
         
         # Check if file is empty (0 bytes) which crashes faster-whisper
         if os.path.getsize(audio_path) == 0:
-             print(f"Audio file is empty: {audio_path}")
+             self.safe_print(f"Audio file is empty: {audio_path}")
              return []
 
-        print("Transcribing audio for subtitles...")
+        self.safe_print("Transcribing audio for subtitles...")
         segments, info = self.model.transcribe(audio_path, word_timestamps=True)
         
         word_list = []

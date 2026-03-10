@@ -13,8 +13,8 @@ class MediaFetcher:
         
 class MediaFetcher:
     def __init__(self):
-        self.pexels_key = os.getenv("PEXELS_API_KEY")
-        self.elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
+        self.pexels_key = os.getenv("PEXELS_API_KEY", "").strip()
+        self.elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
 
     def search_media(self, query, media_type="video", per_page=5, orientation="portrait"):
         """Search Pexels for videos or photos."""
@@ -38,11 +38,17 @@ class MediaFetcher:
                     video_files = item.get('video_files', [])
                     if not video_files: continue
                     best = max(video_files, key=lambda x: x.get('width', 0) * x.get('height', 0))
+                    # Tiny/Preview for Gallery
+                    preview_vid = next((v['link'] for v in video_files if v.get('quality') == 'tiny'), None) 
+                    if not preview_vid:
+                         preview_vid = next((v['link'] for v in video_files if v.get('quality') == 'sd'), best.get('link'))
+
                     results.append({
                         'type': 'video',
                         'id': item.get('id'),
                         'url': best.get('link'),
-                        'preview': item.get('image') # Thumbnail
+                        'preview': item.get('image'), # Thumbnail
+                        'preview_video': preview_vid
                     })
             else:
                  for item in data.get('photos', []):
@@ -141,7 +147,7 @@ class MediaFetcher:
         for attempt in range(3):
             try:
                 print(f"Generating audio (EdgeTTS)...")
-                communicate = edge_tts.Communicate(text, voice)
+                communicate = edge_tts.Communicate(text, voice, rate="+12%")
                 await asyncio.wait_for(communicate.save(filename), timeout=30)
                 return True
             except Exception as e:
@@ -149,11 +155,9 @@ class MediaFetcher:
                 await asyncio.sleep(1)
         return False
 
-    def generate_audio_elevenlabs(self, text, filename):
-        print("Generating audio (ElevenLabs)...")
-        # Adam Voice ID: pMsXgWXvGLBEC91PjDqh (Legacy default) or similar.
-        # Use a stable ID.
-        voice_id = "21m00Tcm4TlvDq8ikWAM" # Rachel (common default) or similar.
+    def generate_audio_elevenlabs(self, text, filename, voice_id="21m00Tcm4TlvDq8ikWAM"):
+        print(f"Generating audio (ElevenLabs, Voice: {voice_id})...")
+        # Default is Rachel if none provided
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         
         headers = {
